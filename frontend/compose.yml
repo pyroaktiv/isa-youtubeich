@@ -29,8 +29,8 @@ services:
       - API_BASE_URL=${API_BASE_URL:-http://app-dev:8080}
 
       # OVO SE MENJA PO POTREBI.
-      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://192.168.0.7:3000}
-      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://192.168.0.7:8080}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://10.237.43.148:3000}
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://10.237.43.148:8080}
 
     env_file:
       - path: ../.env

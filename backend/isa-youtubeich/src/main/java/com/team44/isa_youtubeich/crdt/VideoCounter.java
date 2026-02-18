@@ -54,33 +54,7 @@ public class VideoCounter extends GCounter {
         // 1. Update local state first
         getCounters().computeIfAbsent(myId, k -> new AtomicLong()).incrementAndGet();
 
-        // 2. Serialize the ENTIRE map (State-based replication)
-        byte[] message;
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
-
-            dos.writeByte('i'); // Type flag
-
-            // Snapshot the current state of the map to avoid ConcurrentModification exceptions affecting serialization
-            var currentMap = getCounters();
-            dos.writeInt(currentMap.size()); // Write size of map
-
-            for (var entry : currentMap.entrySet()) {
-                writeUUID(dos, entry.getKey());
-                dos.writeLong(entry.getValue().get());
-            }
-
-            message = baos.toByteArray();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to serialize message", e);
-        }
-
-        try {
-            String payload = Base64.getEncoder().encodeToString(message);
-            getRedisTemplate().convertAndSend(getChannel(), payload);
-        } catch (Exception e) {
-            log.warn("Failed to publish counter update to Redis; continuing with local state", e);
-        }
+        broadcastCurrentState();
     }
 
     @Override
@@ -117,6 +91,7 @@ public class VideoCounter extends GCounter {
                 long reqTimestamp = dis.readLong();
                 long reqValue = dis.readLong();
                 publishRes(dbTimestamp.get(), dbValue.get());
+                broadcastCurrentState();
             } else if (type == 's') {
                 long resTimestamp = dis.readLong();
                 long resValue = dis.readLong();
@@ -159,6 +134,36 @@ public class VideoCounter extends GCounter {
             getRedisTemplate().convertAndSend(getChannel(), payload);
         } catch (Exception e) {
             log.warn("Failed to publish message to Redis", e);
+        }
+    }
+
+    private void broadcastCurrentState() {
+        byte[] message;
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+
+            dos.writeByte('i'); // Type flag: Increment/State Update
+
+            var currentMap = getCounters();
+            dos.writeInt(currentMap.size()); // Write size
+
+            // Serialize the full map
+            for (var entry : currentMap.entrySet()) {
+                writeUUID(dos, entry.getKey());
+                dos.writeLong(entry.getValue().get());
+            }
+
+            message = baos.toByteArray();
+        } catch (IOException e) {
+            log.error("Failed to serialize state", e);
+            return;
+        }
+
+        try {
+            String payload = Base64.getEncoder().encodeToString(message);
+            getRedisTemplate().convertAndSend(getChannel(), payload);
+        } catch (Exception e) {
+            log.warn("Failed to publish state to Redis", e);
         }
     }
 }
